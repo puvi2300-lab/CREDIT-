@@ -38,12 +38,13 @@ dialog::backdrop{background:#0008}label{font-size:13px;color:var(--mu)}
 var CFG={apiKey:"AIzaSyClSrOKD2xjE_hQoidGRE4GLrX-VDViB1c",authDomain:"credit-system-3ccbc.firebaseapp.com",projectId:"credit-system-3ccbc",storageBucket:"credit-system-3ccbc.firebasestorage.app",messagingSenderId:"483627612591",appId:"1:483627612591:web:940b9e6341fb61b0dd175a"};
 var BIZ="MY BUSINESS NAME"; /* shown on printed statements */
 /* ================================================================================================ */
-var COL={c:'cc_customers',i:'cc_invoices',p:'cc_payments'},D={c:[],i:[],p:[]},V={page:'home',cid:null,q:''},fs,auth,ready={},started=false;
+var COL={c:'cc_customers',i:'cc_invoices',p:'cc_payments',r:'cc_routes'},D={c:[],i:[],p:[],r:[]},V={page:'home',cid:null,q:'',route:''},fs,auth,ready={},started=false;
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function today(){return new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10)}
 function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function m(n){return Number(n||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function dd(a,b){return Math.round((new Date(a)-new Date(b))/864e5)}
+function code(c){return c&&c.rt?c.rt+'-'+c.num:''}
 function cust(id){return D.c.find(function(x){return x.id===id})}
 function g(id){return document.getElementById(id).value.trim()}
 function put(k,o){var id=o.id||uid(),x=Object.assign({},o);delete x.id;Object.keys(x).forEach(function(q){if(x[q]===undefined)delete x[q]});fs.collection(COL[k]).doc(id).set(x).catch(function(e){alert('Save failed: '+e.message)});return id}
@@ -72,28 +73,28 @@ function go(p,id){V.page=p;if(id!==undefined)V.cid=id;render();window.scrollTo(0
 function setQ(v){V.q=v;render(true)}
 function net(){return '<span class="tag '+(navigator.onLine?'on':'off')+'">'+(navigator.onLine?'● Online':'● Offline – will sync')+'</span>'}
 function render(keep){var el=document.getElementById('app');if(!started)return;
-  if(!(ready.c&&ready.i&&ready.p)){el.innerHTML='<p class="mu">Loading…</p>';return}
+  if(!(ready.c&&ready.i&&ready.p&&ready.r)){el.innerHTML='<p class="mu">Loading…</p>';return}
   el.innerHTML=(V.page==='cust'&&cust(V.cid))?custView(cust(V.cid)):(V.page='home',home());
   if(keep){var e=document.getElementById('q');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}}}
 function home(){
   var q=V.q.trim().toLowerCase(),all=D.c.map(function(c){return{c:c,r:calc(c.id)}}),
   out=all.reduce(function(s,x){return s+Math.max(0,x.r.bal)},0),al=alerts();
-  var list=all.filter(function(x){if(!q)return true;var c=x.c;
-    return [c.name,c.shop,c.phone,c.addr,c.loc].join(' ').toLowerCase().indexOf(q)>=0||x.r.inv.some(function(i){return (i.no||'').toLowerCase().indexOf(q)>=0})||x.r.pay.some(function(p){return (p.chq||'').toLowerCase().indexOf(q)>=0})});
-  list.sort(function(a,b){return b.r.bal-a.r.bal});
+  var list=all.filter(function(x){if(V.route&&(x.c.rt||'')!==(V.route==='-'?'':V.route))return false;if(!q)return true;var c=x.c;
+    return [code(c),c.name,c.shop,c.phone,c.addr,c.loc].join(' ').toLowerCase().indexOf(q)>=0||x.r.inv.some(function(i){return (i.no||'').toLowerCase().indexOf(q)>=0})||x.r.pay.some(function(p){return (p.chq||'').toLowerCase().indexOf(q)>=0})});
+  list.sort(function(a,b){var x=a.c.rt||'~',y=b.c.rt||'~';return x<y?-1:x>y?1:(a.c.num||0)-(b.c.num||0)});var lt=list.reduce(function(t,x){return t+Math.max(0,x.r.bal)},0);
   return '<div class="top"><h1>Credit Manager</h1><div class="row n">'+net()+'<button class="p" onclick="custForm()">+ Customer</button></div></div>'+
   '<div class="grid"><div class="card stat"><span class="mu">Total outstanding</span><b class="red">Rs '+m(out)+'</b></div><div class="card stat"><span class="mu">Customers</span><b>'+D.c.length+'</b></div><div class="card stat"><span class="mu">Alerts</span><b class="'+(al.length?'amb':'')+'">'+al.length+'</b></div></div>'+
-  (al.length?'<div class="card"><b>Alerts</b>'+al.slice(0,20).map(function(a){return '<div class="al '+(a.lv===2?'w2':'')+'" onclick="go(\'cust\',\''+a.c.id+'\')"><b>'+esc(a.c.name)+'</b>'+(a.c.shop?' · '+esc(a.c.shop):'')+'<br><span class="mu">'+esc(a.t)+' · '+a.s+'</span></div>'}).join('')+'</div>':'')+
-  '<input id="q" placeholder="Search name, shop, phone, address, invoice no, cheque no..." value="'+esc(V.q)+'" oninput="setQ(this.value)">'+
-  '<div class="card">'+(list.length?list.map(function(x){return '<div class="li" onclick="go(\'cust\',\''+x.c.id+'\')"><div><b>'+esc(x.c.name)+'</b><div class="mu">'+esc(x.c.shop)+(x.c.phone?' · '+esc(x.c.phone):'')+'</div></div><b class="'+(x.r.bal>0.5?'red':'grn')+'">Rs '+m(x.r.bal)+'</b></div>'}).join(''):'<span class="mu">'+(D.c.length?'No match':'No customers yet. Tap + Customer.')+'</span>')+'</div>'+
-  '<div class="row"><button onclick="csv()">Export all balances (Excel/CSV)</button><button onclick="backup()">Backup all data</button>'+(window.Notification&&Notification.permission!=='granted'?'<button onclick="askNotif()">Enable alert notifications</button>':'')+'<button onclick="auth.signOut()">Logout</button></div>'}
+  (al.length?'<div class="card"><b>Alerts</b>'+al.slice(0,20).map(function(a){return '<div class="al '+(a.lv===2?'w2':'')+'" onclick="go(\'cust\',\''+a.c.id+'\')"><b>'+esc((code(a.c)+' '+a.c.name).trim())+'</b>'+(a.c.shop?' · '+esc(a.c.shop):'')+'<br><span class="mu">'+esc(a.t)+' · '+a.s+'</span></div>'}).join('')+'</div>':'')+
+  chips()+(V.route?'<div class="mu" style="margin-bottom:6px">Shown: '+list.length+' shops · Outstanding Rs '+m(lt)+'</div>':'')+'<input id="q" placeholder="Search name, shop, phone, address, invoice no, cheque no..." value="'+esc(V.q)+'" oninput="setQ(this.value)">'+
+  '<div class="card">'+(list.length?list.map(function(x){return '<div class="li" onclick="go(\'cust\',\''+x.c.id+'\')"><div><b>'+(code(x.c)?'<span class="tag">'+esc(code(x.c))+'</span> ':'')+esc(x.c.name)+'</b><div class="mu">'+esc(x.c.shop)+(x.c.phone?' · '+esc(x.c.phone):'')+'</div></div><b class="'+(x.r.bal>0.5?'red':'grn')+'">Rs '+m(x.r.bal)+'</b></div>'}).join(''):'<span class="mu">'+(D.c.length?'No match':'No customers yet. Tap + Customer.')+'</span>')+'</div>'+
+  '<div class="row"><button onclick="routeMgr()">Manage routes</button><button onclick="csv()">Export all balances (Excel/CSV)</button><button onclick="backup()">Backup all data</button>'+(window.Notification&&Notification.permission!=='granted'?'<button onclick="askNotif()">Enable alert notifications</button>':'')+'<button onclick="auth.signOut()">Logout</button></div>'}
 function custView(c){
   var r=calc(c.id),t=today(),led=[],bal=0;
   r.inv.forEach(function(x){led.push({d:x.date,k:'i',x:x})});r.pay.forEach(function(p){led.push({d:p.date,k:'p',x:p})});
   led.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:(a.k==='i'?-1:1)});
   return '<div class="top noprint"><button onclick="go(\'home\')">← Back</button><div class="row n"><button class="s" onclick="window.print()">🖨 Print / PDF statement</button><button class="s" onclick="custForm(\''+c.id+'\')">Edit</button><button class="s d" onclick="delCust(\''+c.id+'\')">Delete</button></div></div>'+
   '<div class="pr"><h1>'+esc(BIZ)+'</h1><b>Customer Account Statement</b> · '+t+'</div>'+
-  '<div class="card"><h1>'+esc(c.name)+'</h1><div>'+esc(c.shop)+'</div><div class="mu">'+esc(c.addr)+'</div>'+
+  '<div class="card"><h1>'+(code(c)?esc(code(c))+' · ':'')+esc(c.name)+'</h1><div>'+esc(c.shop)+'</div><div class="mu">'+esc(c.addr)+'</div>'+
   '<div class="mu">'+(c.phone?'📞 <a href="tel:'+esc(c.phone)+'">'+esc(c.phone)+'</a> ':'')+(c.loc?' · 📍 '+(/^https?:/.test(c.loc)?'<a href="'+esc(c.loc)+'" target="_blank" rel="noopener">Map</a>':esc(c.loc)):'')+'</div>'+(c.note?'<div class="mu">'+esc(c.note)+'</div>':'')+
   '<h2 style="margin-bottom:0">Balance: <span class="'+(r.bal>0.5?'red':'grn')+'">Rs '+m(r.bal)+'</span></h2><div class="mu">Total credit Rs '+m(r.tot)+' · Paid Rs '+m(r.paid)+(r.pend>0?' · <span class="amb">Cheques not yet cleared Rs '+m(r.pend)+'</span>':'')+'</div>'+
   '<div class="row noprint" style="margin-top:10px"><button class="p" onclick="invForm(\''+c.id+'\')">+ Credit (Invoice)</button><button class="p" onclick="payForm(\''+c.id+'\')">+ Payment</button></div></div>'+
@@ -110,13 +111,29 @@ function custView(c){
     return '<tr>'+row+'<td class="n">'+m(bal)+'</td><td class="noprint">'+(e.k==='p'?'<button class="s" onclick="payForm(\''+c.id+'\',\''+x.id+'\')">Edit</button> <button class="s d" onclick="del(\'p\',\''+x.id+'\')">✕</button>':'')+'</td></tr>'}).join('')+'</table></div>'+
   '<p class="mu pr">This is a computer-generated statement. Please check with your records.</p>'}
 function F(id,l,v,t,ph){return '<label>'+l+'</label><input id="'+id+'" type="'+(t||'text')+'" value="'+esc(v)+'"'+(ph?' placeholder="'+ph+'"':'')+'>'}
-function dlgOpen(h){var d=document.getElementById('dlg');d.innerHTML=h;d.showModal()}
+function dlgOpen(h){var d=document.getElementById('dlg');d.innerHTML=h;if(!d.open)d.showModal()}
 function shut(){document.getElementById('dlg').close()}
-function custForm(id){var c=id?cust(id):{};
-  dlgOpen('<h2 style="margin-top:0">'+(id?'Edit':'New')+' customer</h2>'+F('f1','Customer name *',c.name)+F('f2','Shop name',c.shop)+F('f3','Phone number',c.phone,'tel')+F('f4','Address',c.addr)+F('f5','Location (Google Maps link or place)',c.loc)+F('f6','Note',c.note)+'<div class="row"><button onclick="shut()">Cancel</button><button class="p" onclick="saveCust(\''+(id||'')+'\')">Save</button></div>')}
-function saveCust(id){var n=g('f1');if(!n){alert('Name is required');return}
-  var o={name:n,shop:g('f2'),phone:g('f3'),addr:g('f4'),loc:g('f5'),note:g('f6')};if(id)o.id=id;
-  var nid=put('c',o);if(!id){V.cid=nid;V.page='cust'}shut()}
+function custForm(id){if(!D.r.length){alert('First add a route (A, B, C ...)');routeMgr();return}
+  var c=id?cust(id):{},sel=c.rt||(V.route&&V.route!=='-'?V.route:'');
+  var ro='<option value="">— select route —</option>'+D.r.slice().sort(function(a,b){return a.code<b.code?-1:1}).map(function(r){return '<option value="'+esc(r.code)+'"'+(sel===r.code?' selected':'')+'>'+esc(r.code)+(r.name?' · '+esc(r.name):'')+'</option>'}).join('');
+  dlgOpen('<h2 style="margin-top:0">'+(id?'Edit':'New')+' customer</h2><label>Route *</label><select id="f0">'+ro+'</select><div class="mu" style="margin-bottom:8px">'+(id&&c.rt?'Shop ID: <b>'+esc(code(c))+'</b> (changes if you change the route)':'Shop number (A-1, A-2 ...) is given automatically')+'</div>'+F('f1','Customer name *',c.name)+F('f2','Shop name',c.shop)+F('f3','Phone number',c.phone,'tel')+F('f4','Address',c.addr)+F('f5','Location (Google Maps link or place)',c.loc)+F('f6','Note',c.note)+'<div class="row"><button onclick="shut()">Cancel</button><button class="p" onclick="saveCust(\''+(id||'')+'\')">Save</button></div>')}
+function saveCust(id){var n=g('f1'),rt=g('f0');if(!n){alert('Name is required');return}if(!rt){alert('Select a route');return}
+  var o={name:n,shop:g('f2'),phone:g('f3'),addr:g('f4'),loc:g('f5'),note:g('f6'),rt:rt},old=id?cust(id):null;
+  if(old&&old.rt===rt)o.num=old.num;else{var mx=0;D.c.forEach(function(x){if(x.rt===rt&&x.num>mx)mx=x.num});o.num=mx+1}
+  if(id)o.id=id;var nid=put('c',o);if(!id){V.cid=nid;V.page='cust'}shut()}
+function chips(){var h='<div class="row n" style="margin-bottom:8px">',rs=D.r.slice().sort(function(a,b){return a.code<b.code?-1:1});
+  h+='<button class="s'+(!V.route?' p':'')+'" onclick="setR(\'\')">All routes</button>';
+  rs.forEach(function(r){h+='<button class="s'+(V.route===r.code?' p':'')+'" onclick="setR(\''+esc(r.code)+'\')">'+esc(r.code)+(r.name?' · '+esc(r.name):'')+'</button>'});
+  if(D.r.length&&D.c.some(function(c){return !c.rt}))h+='<button class="s'+(V.route==='-'?' p':'')+'" onclick="setR(\'-\')">No route</button>';
+  return h+'</div>'}
+function setR(v){V.route=v;render()}
+function routeMgr(){var used='';for(var i=0;i<26;i++){var L=String.fromCharCode(65+i);if(!D.r.some(function(r){return r.code===L})){used=L;break}}
+  dlgOpen('<h2 style="margin-top:0">Routes</h2>'+(D.r.length?D.r.slice().sort(function(a,b){return a.code<b.code?-1:1}).map(function(r){var n=D.c.filter(function(c){return c.rt===r.code}).length;return '<div class="li" style="cursor:default"><span><b>'+esc(r.code)+'</b> '+esc(r.name)+' <span class="mu">('+n+' shops)</span></span><button class="s d" onclick="delRoute(\''+r.id+'\')">Delete</button></div>'}).join(''):'<p class="mu">No routes yet.</p>')+
+  '<h2>Add route</h2><div class="row">'+F('r1','Route code (A, B, C ...)',used)+F('r2','Route name / area (optional)','')+'</div><div class="row"><button onclick="shut()">Close</button><button class="p" onclick="addRoute()">Add route</button></div>')}
+function addRoute(){var c=g('r1').toUpperCase().replace(/[^A-Z0-9]/g,'');if(!c){alert('Enter route code');return}
+  if(D.r.some(function(r){return r.code===c})){alert('Route '+c+' already exists');return}put('r',{code:c,name:g('r2')});setTimeout(routeMgr,600)}
+function delRoute(id){var r=D.r.find(function(x){return x.id===id});if(D.c.some(function(c){return c.rt===r.code})){alert('Route has shops. Move or delete them first.');return}
+  if(confirm('Delete route '+r.code+'?')){rm('r',id);setTimeout(routeMgr,600)}}
 function invForm(cid,id){var x=id?D.i.find(function(i){return i.id===id}):{date:today(),items:[]};
   var lines=(x.items||[]).map(function(i){return i.n+', '+i.q+', '+i.p}).join('\n');
   dlgOpen('<h2 style="margin-top:0">'+(id?'Edit':'New')+' credit invoice</h2><div class="row">'+F('f1','Invoice no. *',x.no)+F('f2','Date',x.date,'date')+'</div><div class="row">'+F('f3','Payment due date (alert)',x.due,'date')+F('f4','Reference / sales ref',x.ref)+'</div>'+
@@ -140,13 +157,13 @@ function del(k,id){if(confirm('Delete this entry?'))rm(k,id)}
 function delCust(id){if(!confirm('Delete this customer and ALL their invoices and payments?'))return;
   var b=fs.batch();b.delete(fs.collection(COL.c).doc(id));D.i.concat(D.p).forEach(function(x){if(x.cid===id)b.delete(fs.collection(x.no!==undefined?COL.i:COL.p).doc(x.id))});b.commit();go('home')}
 function dl(name,txt,type){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:type}));a.download=name;a.click()}
-function csv(){var r=['Customer,Shop,Phone,Address,Total credit,Paid,Balance'];
-  D.c.forEach(function(c){var x=calc(c.id);r.push([c.name,c.shop,c.phone,c.addr,x.tot,x.paid,x.bal].map(function(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}).join(','))});dl('balances-'+today()+'.csv',r.join('\n'),'text/csv')}
+function csv(){var r=['Shop ID,Customer,Shop,Phone,Address,Total credit,Paid,Balance'];
+  D.c.forEach(function(c){var x=calc(c.id);r.push([code(c),c.name,c.shop,c.phone,c.addr,x.tot,x.paid,x.bal].map(function(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}).join(','))});dl('balances-'+today()+'.csv',r.join('\n'),'text/csv')}
 function backup(){dl('credit-backup-'+today()+'.json',JSON.stringify(D),'application/json')}
 function loginView(){document.getElementById('app').innerHTML='<div class="card" style="max-width:380px;margin:40px auto"><h1>Credit Manager</h1><p class="mu">Login</p><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password" onkeydown="if(event.key===\'Enter\')login()"><button class="p" style="width:100%" onclick="login()">Login</button><p id="err" class="red"></p></div>'}
 function login(){auth.signInWithEmailAndPassword(g('em'),document.getElementById('pw').value).catch(function(e){document.getElementById('err').textContent='Login failed: '+e.message})}
 function start(){if(started)return;started=true;
-  ['c','i','p'].forEach(function(k){fs.collection(COL[k]).onSnapshot(function(s){D[k]=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});ready[k]=true;render();if(ready.c&&ready.i&&ready.p)notify()},function(e){if(!auth.currentUser)return;document.getElementById('app').innerHTML='<p class="red">Cannot read data: '+esc(e.message)+'</p>'})})}
+  ['c','i','p','r'].forEach(function(k){fs.collection(COL[k]).onSnapshot(function(s){D[k]=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});ready[k]=true;render();if(ready.c&&ready.i&&ready.p&&ready.r)notify()},function(e){if(!auth.currentUser)return;document.getElementById('app').innerHTML='<p class="red">Cannot read data: '+esc(e.message)+'</p>'})})}
 window.addEventListener('online',function(){render()});window.addEventListener('offline',function(){render()});
 if(CFG.apiKey==='PASTE'){document.getElementById('app').innerHTML='<div class="card"><h1>Setup needed</h1><p>Open <b>index.html</b> in a text editor and paste your Firebase config at the top (CFG).</p></div>'}
 else{firebase.initializeApp(CFG);auth=firebase.auth();fs=firebase.firestore();fs.enablePersistence({synchronizeTabs:true}).catch(function(){});
